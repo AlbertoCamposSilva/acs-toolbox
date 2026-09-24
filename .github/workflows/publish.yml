@@ -1,0 +1,48 @@
+name: Publicar no PyPI
+
+# Dispara ao publicar um release no GitHub. Configure antes o "Trusted Publisher"
+# no PyPI (e no TestPyPI) apontando para este repositório, este arquivo e o
+# ambiente abaixo. Nenhum token é necessário.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      destino:
+        description: "testpypi ou pypi"
+        default: testpypi
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.destino || 'pypi' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: astral-sh/setup-uv@v6
+      - name: Publicar
+        run: |
+          if [ "${{ github.event.inputs.destino }}" = "testpypi" ]; then
+            uv publish --trusted-publishing always --publish-url https://test.pypi.org/legacy/
+          else
+            uv publish --trusted-publishing always
+          fi

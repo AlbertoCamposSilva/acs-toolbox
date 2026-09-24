@@ -1,0 +1,74 @@
+[build-system]
+requires = ["uv_build>=0.12,<0.13"]
+build-backend = "uv_build"
+
+[project]
+name = "acs-toolbox"
+version = "0.1.0"
+description = "Utilitários de uso geral: PostgreSQL, Selenium/Chrome, downloads, barra de progresso e segredos."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Alberto de Campos e Silva", email = "silva@albertocampos.com.br" }]
+keywords = ["selenium", "postgresql", "automation", "download", "progress", "secret-manager"]
+# A licença é declarada em ``license`` (PEP 639); não use classifiers "License ::".
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: Portuguese (Brazilian)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+# Núcleo sem dependências: download e progress funcionam só com a stdlib.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/AlbertoCamposSilva/acs-toolbox"
+Documentation = "https://github.com/AlbertoCamposSilva/acs-toolbox/blob/main/docs/acs_toolbox.md"
+Repository = "https://github.com/AlbertoCamposSilva/acs-toolbox"
+Issues = "https://github.com/AlbertoCamposSilva/acs-toolbox/issues"
+Changelog = "https://github.com/AlbertoCamposSilva/acs-toolbox/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+database = ["pandas>=2.0", "numpy", "psycopg2-binary>=2.9"]
+webdriver = ["selenium>=4.10"]
+notebook = ["ipython"]
+gcp = ["google-cloud-secret-manager>=2.20"]
+all = ["acs-toolbox[database,webdriver,notebook,gcp]"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10", "acs-toolbox[all]"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Testes de integração usam pytest.raises(Exception) de propósito.
+"tests/*" = ["B017"]
+
+[tool.mypy]
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["psycopg2.*", "pandas.*", "selenium.*", "IPython.*", "google.*"]
+ignore_missing_imports = true
