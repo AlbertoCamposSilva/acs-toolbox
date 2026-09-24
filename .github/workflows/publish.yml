@@ -19,7 +19,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uv build
       - run: uvx twine check dist/*
       - uses: actions/upload-artifact@v7
@@ -38,7 +38,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: false  # sem código-fonte aqui; só publica o dist/
       - name: Publicar
