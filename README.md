@@ -15,6 +15,8 @@ uv add "acs-toolbox[gcp]"             # + segredos (Google Secret Manager)
 uv add "acs-toolbox[all]"             # tudo
 ```
 
+Com pip: `pip install "acs-toolbox[all]"`.
+
 Como dependência de um `pyproject.toml`:
 
 ```toml
@@ -65,6 +67,12 @@ load_env("MINHA_API_KEY")                 # copia para os.environ (código que u
 - Instalação e login: `uv add "acs-toolbox[gcp]"` e `gcloud auth application-default login`.
 - Filtrar por chaves reduz a exposição no processo, mas não é uma barreira de acesso: quem lê o
   segredo recebe o JSON inteiro. Use segredos separados quando precisar de isolamento.
+
+## Skill para o Claude Code
+
+A pasta [skills/acs-toolbox](https://github.com/AlbertoCamposSilva/acs-toolbox/tree/main/skills/acs-toolbox)
+contém uma skill que ensina o Claude Code a usar esta biblioteca. Para usá-la em todos os projetos,
+copie a pasta para `~/.claude/skills/acs-toolbox/` (ou para `.claude/skills/acs-toolbox/` de um projeto).
 
 ## Desenvolvimento
 
