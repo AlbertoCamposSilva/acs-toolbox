@@ -62,6 +62,6 @@ def test_delete_temporarios_poupa_tmp_alheio(tmp_path):
 
 
 def test_pasta_padrao(monkeypatch, tmp_path):
-    monkeypatch.setattr(download.os, "name", "posix")
+    monkeypatch.setattr(download.sys, "platform", "linux")
     monkeypatch.setattr(download.os.path, "expanduser", lambda p: str(tmp_path))
     assert default_downloads_path() == os.path.join(str(tmp_path), "Downloads")

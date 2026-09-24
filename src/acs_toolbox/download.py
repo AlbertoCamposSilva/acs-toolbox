@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import time
 
 #: Extensões de arquivos parciais de download (Chrome/Edge e navegadores em geral).
@@ -15,7 +16,7 @@ def default_downloads_path() -> str:
     No Windows lê a pasta configurada no registro (que pode ter sido movida
     pelo usuário); nos demais sistemas, e se a leitura falhar, usa ``~/Downloads``.
     """
-    if os.name == 'nt':
+    if sys.platform == 'win32':
         try:
             import winreg
 
