@@ -29,9 +29,9 @@ def test_as_params_embrulha_parametro_unico():
 def test_db_engine_codifica_usuario_e_senha():
     url = Database.db_engine(dbparams={
         "user": "us@r", "password": "p@ss:w/rd", "host": "h", "port": "5432", "database": "d"})
-    assert url == "postgresql://us%40r:p%40ss%3Aw%2Frd@h:5432/d"
+    assert url == "postgresql+psycopg2://us%40r:p%40ss%3Aw%2Frd@h:5432/d"
     url = Database.engine(dbparams={"user": "u", "password": "p", "host": "h", "dbname": "d"})
-    assert url == "postgresql://u:p@h:5432/d"
+    assert url == "postgresql+psycopg2://u:p@h:5432/d"
 
 
 def test_config_db_connection_erros(tmp_path):
@@ -151,6 +151,17 @@ def test_upsert_dataframe(db):
 def test_read_sql_to_df_com_ponto_e_virgula(db):
     df = db.read_sql_to_df("SELECT %s::text AS a;\n", ("x",))
     assert df.to_dict("records") == [{"a": "x"}]
+
+
+@integracao
+def test_read_sql_to_df_distingue_texto_vazio_de_nulo(db):
+    df = db.read_sql_to_df(
+        "SELECT * FROM (VALUES ('', 1), (NULL, 2), ('NA', 3)) AS v(t, n) ORDER BY n",
+        dtypes={"t": str})
+    assert df["t"].iloc[0] == ""
+    assert pd.isna(df["t"].iloc[1])
+    assert df["t"].iloc[2] == "NA"  # texto "NA" não vira nulo
+    assert list(df["n"]) == [1, 2, 3]
 
 
 @integracao

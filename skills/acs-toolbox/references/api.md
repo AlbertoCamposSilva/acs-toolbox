@@ -76,8 +76,9 @@ password = minha_senha
 
 ### 1.3. Métodos estáticos
 
-* **`db_engine(config_file, dbparams)` / `engine(config_file, dbparams)`**: string de conexão
-  SQLAlchemy, com usuário e senha codificados para URL. Aceita `database` ou `dbname`.
+* **`db_engine(config_file, dbparams)` / `engine(config_file, dbparams)`**: URL de conexão
+  SQLAlchemy `postgresql+psycopg2://...`, com usuário e senha codificados para URL (use com
+  `create_engine(Database.db_engine())`, sem instanciar `Database`). Aceita `database` ou `dbname`.
 * **`config_db_connection(config_file, section, dbparams)`**: devolve os parâmetros como dicionário.
   `FileNotFoundError` se o `.ini` não existir ou nenhuma fonte estiver configurada, `ValueError`
   se faltar a seção, `TypeError` se `dbparams` não for dicionário.
@@ -129,7 +130,8 @@ nas colunas de conflito.
   `primary_key_col` deve ter restrição `PRIMARY KEY`/`UNIQUE`. Linhas duplicadas na chave são
   reduzidas à última. Devolve o DataFrame efetivamente enviado.
 * **`read_sql_to_df(sql, params=None, dtypes=None)`**: leitura massiva via `COPY ... TO STDOUT` para
-  DataFrame. Os tipos são inferidos pelo `pandas` a partir de CSV: datas chegam como texto (use
+  DataFrame (texto vazio e nulo são preservados como `''` e `NaN`). Os tipos são inferidos pelo
+  `pandas` a partir de CSV: datas chegam como texto (use
   `pd.to_datetime` depois) e códigos numéricos perdem zeros à esquerda, a menos que se passe
   `dtypes={"codigo": str}`.
 

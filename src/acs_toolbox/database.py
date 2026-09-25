@@ -156,7 +156,7 @@ class Database:
             dbparams (dict, optional): Dicionário com parâmetros de conexão.
 
         Returns:
-            str: String de conexão PostgreSQL (usuário e senha já codificados para URL).
+            str: URL ``postgresql+psycopg2://`` (usuário e senha já codificados para URL).
         """
         params = Database.config_db_connection(config_file=config_file, dbparams=dbparams)
         username = quote(str(params['user']), safe='')
@@ -164,7 +164,9 @@ class Database:
         host = params['host']
         port = int(params.get('port', 5432))
         dbname = params.get('database') or params['dbname']
-        return f'postgresql://{username}:{password}@{host}:{port}/{dbname}'
+        # Driver explícito: o acs_toolbox usa psycopg2, e o SQLAlchemy 2.1+ usa psycopg (v3)
+        # como padrão para 'postgresql://'.
+        return f'postgresql+psycopg2://{username}:{password}@{host}:{port}/{dbname}'
 
     @staticmethod
     def engine(config_file: str | None = None,
@@ -566,8 +568,10 @@ class Database:
         # Prepara a query com os parâmetros
         sql_formatado = self._mogrify(sql, params).decode('utf-8').strip().rstrip(';')
 
-        # Cria o comando COPY envolvendo a query original
-        copy_query = f"COPY ({sql_formatado}) TO STDOUT WITH (FORMAT CSV, HEADER, DELIMITER ',')"
+        # Cria o comando COPY envolvendo a query original. NULL vira \N (texto vazio
+        # sai como ""), para que o pandas não confunda '' com nulo.
+        copy_query = (f"COPY ({sql_formatado}) TO STDOUT "
+                      f"WITH (FORMAT CSV, HEADER, DELIMITER ',', NULL '\\N')")
 
         # Buffer de memória para receber os dados
         buffer = io.StringIO()
@@ -581,7 +585,7 @@ class Database:
 
             # ``dtypes`` evita que identificadores numéricos longos percam
             # zeros à esquerda ou precisão (ex.: {'codigo': str}).
-            return pd.read_csv(buffer, dtype=dtypes)
+            return pd.read_csv(buffer, dtype=dtypes, keep_default_na=False, na_values=['\\N'])
         except Exception as error:
             self.rollback()
             self._log_error('Erro na leitura massiva', error, copy_query)

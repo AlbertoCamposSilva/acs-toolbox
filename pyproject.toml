@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "acs-toolbox"
-version = "0.1.0"
+version = "0.1.1"
 description = "Utilitários de uso geral: PostgreSQL, Selenium/Chrome, downloads, barra de progresso e segredos."
 readme = "README.md"
 requires-python = ">=3.10"
