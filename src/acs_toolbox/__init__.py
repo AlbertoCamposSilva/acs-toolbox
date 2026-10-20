@@ -2,7 +2,7 @@
 Pacote acs_toolbox
 ------------------
 Utilitários de uso geral para automação, banco de dados (PostgreSQL),
-downloads e acompanhamento de progresso.
+downloads, barra de progresso, segredos e e-mail institucional (Zimbra/ActiveSync).
 
 Os submódulos são carregados sob demanda, para que ``import acs_toolbox``
 não exija todas as dependências opcionais (extras ``database``,
@@ -23,6 +23,7 @@ __all__ = [
     "progress",
     "segredos",
     "webdriver",
+    "zimbra",
 ]
 
 

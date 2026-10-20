@@ -1,6 +1,6 @@
 # acs-toolbox
 
-Utilitários de uso geral para automação, banco de dados PostgreSQL, downloads, progresso e segredos.
+Utilitários de uso geral para automação, banco de dados PostgreSQL, downloads, progresso, segredos e e-mail institucional (Zimbra / Exchange ActiveSync).
 Referência completa das classes: [docs/acs_toolbox.md](https://github.com/AlbertoCamposSilva/acs-toolbox/blob/main/docs/acs_toolbox.md).
 
 ## Instalação (uv)
@@ -8,7 +8,7 @@ Referência completa das classes: [docs/acs_toolbox.md](https://github.com/Alber
 Em outro projeto gerenciado por uv:
 
 ```bash
-uv add acs-toolbox                    # núcleo (Download, Progress)
+uv add acs-toolbox                    # núcleo (Download, Progress, Zimbra)
 uv add "acs-toolbox[database]"        # + Database (psycopg2, pandas, numpy)
 uv add "acs-toolbox[webdriver]"       # + WebDriver (selenium)
 uv add "acs-toolbox[gcp]"             # + segredos (Google Secret Manager)
@@ -20,14 +20,14 @@ Com pip: `pip install "acs-toolbox[all]"`.
 Como dependência de um `pyproject.toml`:
 
 ```toml
-dependencies = ["acs-toolbox[database,webdriver]>=0.1"]
+dependencies = ["acs-toolbox[database,webdriver]>=0.2"]
 ```
 
 ## Extras
 
 | Extra       | Habilita                | Dependências                        |
 |-------------|-------------------------|-------------------------------------|
-| (núcleo)    | `Download`, `Progress`  | nenhuma                             |
+| (núcleo)    | `Download`, `Progress`, `Zimbra` | nenhuma (usa stdlib; `Zimbra` lê o cofre se `gcp` estiver configurado) |
 | `database`  | `Database`              | pandas, numpy, psycopg2-binary      |
 | `webdriver` | `WebDriver`             | selenium                            |
 | `notebook`  | limpeza de saída Jupyter no `Progress` | ipython              |
@@ -67,6 +67,32 @@ load_env("MINHA_API_KEY")                 # copia para os.environ (código que u
 - Instalação e login: `uv add "acs-toolbox[gcp]"` e `gcloud auth application-default login`.
 - Filtrar por chaves reduz a exposição no processo, mas não é uma barreira de acesso: quem lê o
   segredo recebe o JSON inteiro. Use segredos separados quando precisar de isolamento.
+
+## E-mail Institucional Zimbra / Exchange ActiveSync (`acs_toolbox.zimbra`)
+
+A classe `Zimbra` acessa o servidor `webmail.cnpq.br` via protocolo **Exchange ActiveSync (EAS 14.1 / WBXML)**:
+
+```python
+from acs_toolbox.zimbra import Zimbra
+
+# Uso com DeviceId fixo e modo somente leitura
+with Zimbra(device_id="MESAALBERTO01", somente_leitura=True) as zm:
+    pastas = zm.listar_pastas()
+    mensagens = zm.listar_mensagens("Inbox", limite=5)
+    for m in mensagens:
+        print(m.data_recebimento, m.remetente, m.assunto)
+```
+
+- **DeviceId Fixo e Provisionamento ([MS-ASPROV]):** Por padrão, informe sempre um `device_id` estável (ex.: `device_id="MESAALBERTO01"` ou variável `ZIMBRA_DEVICE_ID`). O cliente executa o handshake de provisionamento em 2 fases (`Cmd=Provision`), armazena o `PolicyKey` em cache local (`%LOCALAPPDATA%\acs_toolbox\zimbra_provision.json`) e o envia no cabeçalho `X-MS-PolicyKey`, permitindo múltiplas chamadas consecutivas estáveis sem criar dezenas de aparelhos no Zimbra.
+- **Como limpar aparelhos antigos acumulados no Webmail Zimbra:**
+  1. Acesse o webmail institucional em `https://webmail.cnpq.br`.
+  2. Vá em **Preferências** $\rightarrow$ **Aplicativos e dispositivos móveis**.
+  3. Localize na tabela de dispositivos móveis os aparelhos antigos gerados anteriormente (com identificadores aleatórios como `AGY...`) e clique em **Remover** / **Excluir**.
+  4. Mantenha apenas o aparelho fixo configurado na sua aplicação (ex.: `MESAALBERTO01`) e os seus dispositivos móveis pessoais (celular/tablet).
+- **Modo Somente Leitura (`somente_leitura=True`):** Impede qualquer envio acidental de e-mails via `enviar_email()` / `Cmd=SendMail`, levantando `ZimbraError`.
+- **Validação TLS por Padrão (`ignora_erros_certificado=False`):** As conexões HTTPS utilizam o hostname `webmail.cnpq.br` com SNI e verificação criptográfica estrita do certificado digital emitido para o CNPq.
+- **Necessidade obrigatória de VPN (`vpn-connect`):** Fora da rede do CNPq, `webmail.cnpq.br` resolve por Split-DNS para o WAF da Radware (`66.22.29.31`), cujo *Bot Manager* intercepta requisições `POST /Microsoft-Server-ActiveSync` e redireciona (`302 Found`) para uma página de Captcha JavaScript (`validate.perfdrive.com`). Com a VPN conectada, `webmail.cnpq.br` resolve diretamente para o IP interno `10.0.5.42`. Por padrão (`garantir_vpn=True`), `Zimbra()` verifica a rota interna e aciona automaticamente o pacote `vpn-connect` (`C:\Projetos\CNPq\importantes\VPN Connect`) se necessário.
+- **Senha de Aplicativo (`ZIMBRA_APP_PASSWORD`):** Contas com 2FA ativo no Zimbra exigem uma Senha de Aplicativo de 16 letras gerada no webmail (*Preferências $\rightarrow$ Contas $\rightarrow$ Códigos de Aplicativo*), lida de `ZIMBRA_APP_PASSWORD` no cofre `acs_toolbox.segredos`. O login deve usar domínio em branco (ex.: `alberto.silva@cnpq.br` ou `albertos`).
 
 ## Skill para o Claude Code
 

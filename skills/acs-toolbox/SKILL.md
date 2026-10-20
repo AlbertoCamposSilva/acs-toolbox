@@ -1,14 +1,14 @@
 ---
 name: acs-toolbox
-description: Como usar a biblioteca Python acs-toolbox (PyPI) — Database (PostgreSQL/psycopg2 com upsert de DataFrame, inserção de listas de dicionários, leitura massiva via COPY), WebDriver (Selenium/Chrome configurado para downloads), Download (esperar e renomear arquivos baixados), Progress (progresso com estimativa de término) e segredos (Google Secret Manager). Use sempre que o projeto importar acs_toolbox ou tiver acs-toolbox nas dependências, quando o usuário pedir para adicionar/usar/migrar para o acs-toolbox, ou quando ele quiser nesses projetos consultar/gravar no PostgreSQL, automatizar downloads com Chrome, mostrar progresso de um laço longo ou ler credenciais do Secret Manager — mesmo que não cite o nome da biblioteca.
+description: Como usar a biblioteca Python acs-toolbox (PyPI) — Database (PostgreSQL/psycopg2 com upsert de DataFrame, inserção de listas de dicionários, leitura massiva via COPY), WebDriver (Selenium/Chrome configurado para downloads), Download (esperar e renomear arquivos baixados), Progress (progresso com estimativa de término), Zimbra (e-mail institucional CNPq via Exchange ActiveSync com verificação automática de VPN) e segredos (Google Secret Manager). Use sempre que o projeto importar acs_toolbox ou tiver acs-toolbox nas dependências, quando o usuário pedir para adicionar/usar/migrar para o acs-toolbox, ou quando ele quiser nesses projetos consultar/gravar no PostgreSQL, automatizar downloads com Chrome, mostrar progresso de um laço longo, acessar e-mails do Zimbra/CNPq ou ler credenciais do Secret Manager — mesmo que não cite o nome da biblioteca.
 ---
 
 # acs-toolbox
 
 Biblioteca de utilitários do autor para os seus projetos Python. Prefira-a a reescrever o mesmo
-código (conexão Postgres, espera de download, barra de progresso, leitura de segredos): ela já trata
+código (conexão Postgres, espera de download, barra de progresso, leitura de segredos, e-mail Zimbra): ela já trata
 casos que costumam dar errado — escape de identificadores SQL, downloads parciais `.crdownload`,
-travas de arquivo do Windows, segredos que não vazam em logs.
+travas de arquivo do Windows, segredos que não vazam em logs, Split-DNS/WAF do Zimbra CNPq.
 
 A referência completa de cada classe, com todos os parâmetros, está em
 `references/api.md`. Leia a seção do módulo que for usar antes de escrever código não trivial.
@@ -19,7 +19,7 @@ Cada módulo tem um extra; instale só o necessário:
 
 | Módulo | Extra | Dependências |
 |---|---|---|
-| `acs_toolbox.download`, `acs_toolbox.progress` | (núcleo) | nenhuma |
+| `acs_toolbox.download`, `acs_toolbox.progress`, `acs_toolbox.zimbra` | (núcleo) | nenhuma (`zimbra` usa `gcp` para ler o cofre) |
 | `acs_toolbox.database` | `database` | pandas, numpy, psycopg2-binary |
 | `acs_toolbox.webdriver` | `webdriver` | selenium |
 | `acs_toolbox.segredos` | `gcp` | google-cloud-secret-manager |
@@ -30,7 +30,7 @@ uv add "acs-toolbox[database,webdriver]"   # projeto com uv
 pip install "acs-toolbox[all]"             # ou pip
 ```
 
-No `pyproject.toml`: `dependencies = ["acs-toolbox[database]>=0.1"]`. Se um import falhar com
+No `pyproject.toml`: `dependencies = ["acs-toolbox[database]>=0.2"]`. Se um import falhar com
 "Instale o extra ...", é o extra que falta — não instale os pacotes avulsos.
 
 ## Qual módulo usar
@@ -42,6 +42,7 @@ No `pyproject.toml`: `dependencies = ["acs-toolbox[database]>=0.1"]`. Se um impo
   `Download` (espera terminar e renomeia).
 - **Laço demorado** → `Progress`.
 - **Senhas, tokens, parâmetros de conexão** → `segredos`, nunca valores no código.
+- **Ler/buscar/enviar e-mail no Zimbra do CNPq (`webmail.cnpq.br`)** → `Zimbra` (requer VPN ativa via `vpn-connect`).
 
 ## Database
 
@@ -140,6 +141,25 @@ debug = get_secret("DEBUG", default="0")
 - `load_env(...)` copia para `os.environ` quando o código existente usa `os.getenv`.
 - Chave ausente → `SecretNotFound`; cofre não configurado → `SecretsNotConfigured` (a menos que haja
   `default`). Nunca imprima nem logue os valores.
+
+## Zimbra (`acs_toolbox.zimbra`)
+
+```python
+from acs_toolbox.zimbra import Zimbra
+
+with Zimbra() as zm:  # garante a VPN ativa via vpn-connect e lê ZIMBRA_USER / ZIMBRA_APP_PASSWORD
+    pastas = zm.listar_pastas()
+    mensagens = zm.listar_mensagens(pasta="Inbox", limite=5)
+    achados = zm.buscar_mensagens("Chamada", pasta="GT CAs", limite=10)
+    zm.enviar_email(para="alguem@cnpq.br", assunto="Aviso", corpo="Mensagem de teste")
+```
+
+- **VPN do CNPq obrigatória (`vpn-connect`):** Fora da VPN, `webmail.cnpq.br` resolve para o WAF da Radware (`66.22.29.31`), que redireciona requisições `POST /Microsoft-Server-ActiveSync` para Captcha (`validate.perfdrive.com`). Com a VPN conectada, resolve para `10.0.5.42`. Por padrão (`garantir_vpn=True`), `Zimbra()` verifica a rota interna e aciona `vpn_connect` automaticamente (ou levanta `ZimbraVPNRequiredError`).
+- **Credenciais:** Usa a Senha de Aplicativo de 16 letras do Zimbra (`ZIMBRA_APP_PASSWORD` no cofre) e login sem prefixo de domínio (`ZIMBRA_USER`, padrão `alberto.silva@cnpq.br`).
+- **Configuração no PC (Outlook Clássico vs. Thunderbird):**
+  - **Thunderbird:** Não suporta EAS para e-mail (apenas EWS/IMAP); não funciona diretamente com a caixa do CNPq.
+  - **Outlook Clássico:** A Microsoft ocultou a configuração manual de EAS no Windows 11. Para configurar, feche o Outlook, pressione `Win + R` e abra `"C:\Program Files\Microsoft Office\root\Office16\MLCFG32.CPL"` $\rightarrow$ *Contas de Email* $\rightarrow$ *Novo...* $\rightarrow$ *Manual* $\rightarrow$ *Exchange ActiveSync (EAS)* usando servidor `webmail.cnpq.br` e a Senha de Aplicativo (16 letras).
+  - **Desativar Novo Outlook:** Se o Windows insistir em abrir o New Outlook, execute no PowerShell: `Set-ItemProperty -Path "HKCU:\Software\Microsoft\Office\16.0\Outlook\Preferences" -Name "UseNewOutlook" -Value 0`.
 
 ## Migração de código antigo (versões internas anteriores à 0.1.0)
 

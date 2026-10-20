@@ -78,17 +78,23 @@ def test_load_payload_devolve_copia(cofre):
 
 
 def test_json_invalido_nao_expoe_conteudo(monkeypatch):
-    from types import SimpleNamespace
-
-    from google.cloud import secretmanager
+    import base64
+    import io
+    import json
+    import urllib.request
+    from unittest.mock import MagicMock
 
     valor = b'{"SENHA": "super-secreta"'  # JSON truncado
+    payload_json = json.dumps({"payload": {"data": base64.b64encode(valor).decode("ascii")}}).encode("utf-8")
 
-    class FakeClient:
-        def access_secret_version(self, request):
-            return SimpleNamespace(payload=SimpleNamespace(data=valor))
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = payload_json
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
 
-    monkeypatch.setattr(secretmanager, "SecretManagerServiceClient", FakeClient)
+    monkeypatch.setattr(segredos, "_obter_gcp_access_token", lambda: "fake-token")
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=15: mock_resp)
+
     with pytest.raises(ValueError) as exc:
         _fetch_payload_real("proj", "nome")
     assert "super-secreta" not in repr(exc.value)

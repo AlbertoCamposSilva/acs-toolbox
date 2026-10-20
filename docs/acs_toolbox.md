@@ -1,6 +1,6 @@
 # Referência técnica do acs-toolbox
 
-Classes e funções de uso geral: `Database`, `Download`, `Progress`, `WebDriver` e o módulo `segredos`.
+Classes e funções de uso geral: `Database`, `Download`, `Progress`, `WebDriver`, `Zimbra` e o módulo `segredos`.
 Todos ficam em submódulos (`acs_toolbox.database`, etc.), carregados sob demanda. Importar um
 submódulo sem o extra correspondente gera `ImportError` com o comando de instalação.
 
@@ -11,6 +11,7 @@ submódulo sem o extra correspondente gera `ImportError` com o comando de instal
 | `acs_toolbox.progress` | (núcleo; `notebook` opcional) | Progresso com estimativa de término e pausas em horário comercial |
 | `acs_toolbox.webdriver` | `webdriver` | Chrome via Selenium já configurado para downloads |
 | `acs_toolbox.segredos` | `gcp` | Segredos no Google Secret Manager (um único JSON) |
+| `acs_toolbox.zimbra` | (núcleo; `gcp` para cofre) | E-mail institucional Zimbra/CNPq via Exchange ActiveSync (WBXML) |
 
 Instalação: `uv add "acs-toolbox[all]"` (ou `pip install "acs-toolbox[all]"`); escolha só os extras
 necessários, ex. `acs-toolbox[database,webdriver]`.
@@ -273,3 +274,120 @@ load_env("API_TOKEN")                            # para código legado que usa o
   A chave `postgresql` é usada automaticamente por `Database()` quando não há `dbparams` nem `.ini`.
 * Um segredo que não seja JSON válido gera `ValueError` sem expor o conteúdo.
 * Em testes/CI, defina variáveis de ambiente com os nomes das chaves: o cofre nem é consultado.
+
+---
+
+## 6. `Zimbra` (`acs_toolbox.zimbra`)
+
+Cliente para leitura, busca e envio de e-mails no Zimbra institucional do CNPq (`webmail.cnpq.br`)
+utilizando o protocolo **Exchange ActiveSync (EAS 14.1)** sobre HTTPS/WBXML (100% biblioteca padrão do Python).
+
+### 6.1. Pré-requisitos obrigatórios: VPN do CNPq (`vpn-connect`) e Senha de Aplicativo
+
+1. **Conexão com a VPN (`vpn-connect`) antes do acesso:**
+   * O CNPq utiliza **Split-DNS** em `webmail.cnpq.br`:
+     * **Fora da VPN (Internet Pública):** resolve para `66.22.29.31` (`radwarecloud.net`). Embora o WAF da Radware permita `POST /Autodiscover/Autodiscover.xml` e `OPTIONS /Microsoft-Server-ActiveSync`, o *Radware Bot Manager* **intercepta qualquer requisição `POST /Microsoft-Server-ActiveSync`** com redirecionamento `HTTP 302 Found` para uma página de Captcha JavaScript (`https://validate.perfdrive.com/...`), impedindo a sincronização de pastas e leitura/envio de mensagens.
+     * **Dentro da VPN (ou rede física do CNPq):** resolve diretamente para o IP interno `10.0.5.42` (servidor Zimbra/Nginx em Brasília), sem passar pelo WAF da Radware.
+   * Por padrão (`garantir_vpn=True`), `Zimbra()` verifica automaticamente se `webmail.cnpq.br` resolve para a rede interna (`10.0.5.42`) e, caso contrário, tenta acionar o pacote `vpn_connect` (`C:\Projetos\CNPq\importantes\VPN Connect`) automaticamente. Se a VPN não puder ser estabelecida, levanta `ZimbraVPNRequiredError`.
+   * Para conectar a VPN manualmente via terminal antes de rodar scripts:
+     ```powershell
+     uv run --project "C:\Projetos\CNPq\importantes\VPN Connect" python -m vpn_connect.cli
+     ```
+2. **Senha de Aplicativo do Zimbra (`ZIMBRA_APP_PASSWORD`) e Formato do Login:**
+   * Contas com 2FA ativo no Zimbra recusam a senha normal de rede (`SENHA_WINDOWS`) em protocolos não interativos (`401 Unauthorized`). É obrigatório gerar uma **Senha de Aplicativo de 16 letras** no webmail (*Preferências $\rightarrow$ Contas $\rightarrow$ Códigos de Aplicativo / Application Passcodes*) e salvá-la no cofre `acs_toolbox.segredos` na chave `ZIMBRA_APP_PASSWORD`.
+   * **Domínio e Login:** O domínio deve ficar **em branco**. São aceitos `alberto.silva@cnpq.br` (recomendado), `albertos@cnpq.br`, `alberto.silva` ou `albertos`. Prefixar `cnpq.lan\` sem `@cnpq.br` (ex.: `cnpq.lan\albertos`) é rejeitado pelo ZeXtras Mobile; `Zimbra()` remove prefixos `dominio\` automaticamente.
+
+### 6.2. Exemplo rápido
+
+```python
+from acs_toolbox.zimbra import Zimbra
+
+with Zimbra() as zm:  # garante a VPN ativa e lê ZIMBRA_USER e ZIMBRA_APP_PASSWORD do cofre
+    conta = zm.autodiscover()
+    print(conta["display_name"], conta["email"])
+
+    # Listar pastas da caixa postal
+    for pasta in zm.listar_pastas():
+        print(f"[{pasta.id}] {pasta.nome} (pai={pasta.parent_id}, tipo={pasta.tipo})")
+
+    # Ler as 5 mensagens mais recentes da Inbox
+    for msg in zm.listar_mensagens(pasta="Inbox", limite=5):
+        print(msg.data_recebimento, msg.remetente, "->", msg.assunto)
+        print(msg.corpo[:200])
+
+    # Buscar mensagens por termo em pasta específica
+    resultados = zm.buscar_mensagens("Chamada", pasta="GT CAs", limite=10)
+
+    # Enviar e-mail via Exchange ActiveSync
+    zm.enviar_email(
+        para="destinatario@cnpq.br",
+        assunto="Relatório automatizado",
+        corpo="Segue o resumo processado.",
+    )
+```
+
+### 6.3. Inicialização e Métodos
+
+```python
+zm = Zimbra(
+    user=None,
+    password=None,
+    host="webmail.cnpq.br",
+    garantir_vpn=True,
+    timeout=15,
+    ignora_erros_certificado=True,
+)
+```
+
+* **Resolução de credenciais:**
+  * `user`: argumento `user` $\rightarrow$ `ZIMBRA_USER` $\rightarrow$ `CNPQ_EMAIL` $\rightarrow$ `zimbra["user"]` $\rightarrow$ `CNPQ_USER` $\rightarrow$ `"alberto.silva@cnpq.br"`.
+  * `password`: argumento `password` $\rightarrow$ `ZIMBRA_APP_PASSWORD` $\rightarrow$ `ZIMBRA_PASSWORD` $\rightarrow$ `zimbra["password"]` (se ausente, levanta `SecretNotFound(["ZIMBRA_APP_PASSWORD"])`).
+* **`verificar_vpn_ativa() -> bool`**: retorna `True` se `webmail.cnpq.br` estiver resolvendo para IP interno ou se `10.0.5.42:443` responder diretamente.
+* **`assegurar_vpn() -> None`**: garante a rota interna ativa (acionando `vpn_connect` se necessário) ou levanta `ZimbraVPNRequiredError`.
+* **`autodiscover() -> dict[str, str]`**: consulta `POST /Autodiscover/Autodiscover.xml` e devolve `display_name`, `email` e `activesync_url`.
+* **`verificar_conexao() -> dict[str, Any]`**: consulta `OPTIONS /Microsoft-Server-ActiveSync` e devolve `conectado`, `servidor_activesync`, `versoes` e `comandos`.
+* **`listar_pastas() -> list[PastaZimbra]`**: executa `Cmd=FolderSync` e devolve objetos `PastaZimbra(id, parent_id, nome, tipo)`.
+* **`obter_id_pasta(nome: str) -> str`**: resolve o nome da pasta (ex.: `"Inbox"` $\rightarrow$ `"2"`, `"Sent"` $\rightarrow$ `"5"`, `"GT CAs"` $\rightarrow$ `"125890"`) para seu `ServerId`.
+* **`listar_mensagens(pasta="Inbox", limite=10, desde="2020-01-01T00:00:00.000Z", texto_busca=None, truncation_size=50000) -> list[MensagemZimbra]`**: executa `Cmd=Search` no store `Mailbox` e devolve objetos `MensagemZimbra(id, pasta_id, assunto, remetente, para, cc, data_recebimento, lida, corpo, tamanho)`.
+* **`buscar_mensagens(texto_busca, pasta="Inbox", limite=10, desde="2020-01-01T00:00:00.000Z") -> list[MensagemZimbra]`**: atalho para busca textual.
+* **`enviar_email(para, assunto, corpo, cc=None, cco=None, html=False, salvar_itens_enviados=True) -> bool`**: envia e-mail via `Cmd=SendMail` (CodePage 21 `ComposeMail`).
+* **Exceções:** `ZimbraError` (base), `ZimbraVPNRequiredError` (bloqueio pelo WAF Radware / VPN desligada) e `ZimbraAuthError` (`HTTP 401/403`).
+
+### 6.4. Configuração de Clientes de E-mail Desktop no PC (Outlook Clássico vs. Thunderbird)
+
+O servidor de correio institucional do CNPq (`webmail.cnpq.br`) utiliza **Zimbra Collaboration Suite com ZeXtras Mobile**, disponibilizando o protocolo **Exchange ActiveSync (EAS)** sobre HTTPS (porta 443). As portas padrão IMAP (143/993) e SMTP (25/465/587) encontram-se bloqueadas na rede interna.
+
+#### 1. Incompatibilidade com o Mozilla Thunderbird
+* O Thunderbird possui suporte a IMAP, POP3 e, nas versões recentes, adicionou suporte nativo ao **EWS (Exchange Web Services)**.
+* **O CNPq não possui EWS**, apenas **EAS**. Como o Thunderbird não suporta o protocolo EAS para sincronização de mensagens de e-mail (extensões como TbSync sincronizam apenas contatos e calendários), **não é possível configurar a caixa postal do CNPq diretamente no Thunderbird**. A tentativa de conexão como "Microsoft Exchange" falhará com erro de autenticação / 404.
+
+#### 2. Configuração no Outlook Clássico (Procedimento Obrigatório com `MLCFG32.CPL`)
+A Microsoft removeu o applet clássico do Painel de Controle e substituiu o assistente de contas do Outlook por uma interface moderna simplificada que **não suporta a configuração manual de contas EAS**, gerando o erro *"Algo deu errado e o Outlook não pôde configurar a sua conta"*.
+
+Para configurar a conta corporativa do CNPq com sucesso no Outlook Clássico:
+
+1. **Abrir o painel clássico de configuração de e-mail**:
+   Pressione `Win + R` e execute exatamente:
+   ```cmd
+   "C:\Program Files\Microsoft Office\root\Office16\MLCFG32.CPL"
+   ```
+   *(Ou abra `Painel de Controle` $\rightarrow$ exibir por `Ícones grandes` $\rightarrow$ `Email (Microsoft Outlook)`).*
+
+2. **Adicionar a conta pelo assistente clássico**:
+   * Clique em **Contas de Email...** e depois em **Novo...**.
+   * Selecione **Configuração manual ou tipos de servidor adicionais** e avance.
+   * Selecione **Serviço compatível com Exchange ActiveSync** (EAS) e avance.
+   * Preencha os campos exatamente como abaixo:
+     * **Seu Nome**: `Alberto de Campos e Silva`
+     * **Endereço de Email**: `alberto.silva@cnpq.br`
+     * **Servidor de Email**: `webmail.cnpq.br`
+     * **Nome de Usuário**: `alberto.silva@cnpq.br`
+     * **Senha**: sua **Senha de Aplicativo** de 16 caracteres (`ZIMBRA_APP_PASSWORD` gerada no Webmail em *Preferências $\rightarrow$ Contas $\rightarrow$ Códigos de Aplicativo* — a senha normal de rede será recusada devido ao 2FA).
+   * Clique em **Avançar** para concluir o teste e fechar o assistente.
+
+3. **Reverter o "Novo Outlook" para o "Outlook Clássico" (se necessário)**:
+   Se o Windows estiver redirecionando e abrindo o Novo Outlook compulsoriamente (ou se o link "Voltar para o Outlook clássico" não responder), desative o redirecionamento via PowerShell:
+   ```powershell
+   Set-ItemProperty -Path "HKCU:\Software\Microsoft\Office\16.0\Outlook\Preferences" -Name "UseNewOutlook" -Value 0
+   ```
+

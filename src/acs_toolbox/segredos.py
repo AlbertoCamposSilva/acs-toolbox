@@ -50,25 +50,87 @@ class SecretNotFound(KeyError):
         return str(self.args[0])
 
 
-def _fetch_payload(project: str, name: str) -> dict[str, Any]:
-    """Baixa e decodifica a versão mais recente do segredo JSON."""
+def _obter_gcp_access_token() -> str:
+    """
+    Obtém token de acesso OAuth2 para a API do Google Cloud.
+    Tenta primeiro via google.auth (ADC) em Python puro;
+    se indisponível ou sem token, usa 'gcloud auth print-access-token'.
+    """
     try:
-        from google.cloud import secretmanager
-    except ImportError as e:  # pragma: no cover - depende do extra
-        raise ImportError(
-            'Instale o extra "gcp": uv add "acs-toolbox[gcp]"') from e
+        import google.auth
+        import google.auth.transport.requests
+        credentials, _ = google.auth.default(
+            scopes=['https://www.googleapis.com/auth/cloud-platform']
+        )
+        if not credentials.valid:
+            request = google.auth.transport.requests.Request()
+            credentials.refresh(request)
+        if credentials.token:
+            return credentials.token
+    except Exception:
+        pass
 
-    client = secretmanager.SecretManagerServiceClient()
-    response = client.access_secret_version(
-        request={'name': f'projects/{project}/secrets/{name}/versions/latest'})
+    # Fallback gcloud CLI
+    import subprocess
     try:
-        data = json.loads(response.payload.data.decode('utf-8'))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        token = subprocess.check_output(
+            'gcloud auth print-access-token',
+            shell=True,
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        ).strip()
+        if token:
+            return token
+    except Exception as e:
+        raise RuntimeError(
+            'Não foi possível obter token de autenticação GCP via ADC nem via gcloud CLI.'
+        ) from e
+
+    raise RuntimeError('Token de acesso GCP retornado está vazio.')
+
+
+def _fetch_payload(project: str, name: str) -> dict[str, Any]:
+    """Baixa e decodifica a versão mais recente do segredo JSON via REST HTTPS puro."""
+    import base64
+    import urllib.request
+    import urllib.error
+
+    token = _obter_gcp_access_token()
+    url = f'https://secretmanager.googleapis.com/v1/projects/{project}/secrets/{name}/versions/latest:access'
+    req = urllib.request.Request(
+        url,
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/json',
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        corpo = e.read().decode('utf-8', errors='replace')
+        raise RuntimeError(
+            f'Erro HTTP {e.code} ao acessar o cofre Secret Manager "{name}" no projeto "{project}": {corpo[:200]}'
+        ) from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(
+            f'Falha de rede ao conectar à API do Secret Manager: {e.reason}'
+        ) from e
+
+    try:
+        raw_b64 = data['payload']['data']
+        payload_bytes = base64.b64decode(raw_b64)
+        secret_dict = json.loads(payload_bytes.decode('utf-8'))
+    except (KeyError, UnicodeDecodeError, json.JSONDecodeError):
         # ``from None``: o JSONDecodeError guarda o documento inteiro (o segredo).
         raise ValueError('O segredo não contém JSON válido em UTF-8.') from None
-    if not isinstance(data, dict):
+
+    if not isinstance(secret_dict, dict):
         raise ValueError('O segredo deve conter um objeto JSON (chave -> valor).')
-    return data
+
+    return secret_dict
 
 
 def _config() -> tuple[str, str] | None:

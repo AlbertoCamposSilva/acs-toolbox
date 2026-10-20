@@ -4,14 +4,14 @@ build-backend = "uv_build"
 
 [project]
 name = "acs-toolbox"
-version = "0.1.1"
-description = "Utilitários de uso geral: PostgreSQL, Selenium/Chrome, downloads, barra de progresso e segredos."
+version = "0.3.0"
+description = "Utilitários de uso geral: PostgreSQL, Selenium/Chrome, downloads, barra de progresso, segredos e e-mail Zimbra/ActiveSync."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Alberto de Campos e Silva", email = "silva@albertocampos.com.br" }]
-keywords = ["selenium", "postgresql", "automation", "download", "progress", "secret-manager"]
+keywords = ["selenium", "postgresql", "automation", "download", "progress", "secret-manager", "zimbra", "activesync"]
 # A licença é declarada em ``license`` (PEP 639); não use classifiers "License ::".
 classifiers = [
     "Development Status :: 3 - Alpha",
