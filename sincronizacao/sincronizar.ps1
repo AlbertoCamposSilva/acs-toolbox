@@ -27,7 +27,9 @@ param(
     [switch]$Force
 )
 
-$ErrorActionPreference = 'Stop'
+# 'Continue': com 'Stop', o Windows PowerShell 5.1 trata qualquer saída de erro de programa externo
+# (rclone, attrib) como falha fatal. Os erros são tratados pelos códigos de saída.
+$ErrorActionPreference = 'Continue'
 
 # --- Configuração --------------------------------------------------------------
 $Local      = 'E:\Projetos'
@@ -56,6 +58,13 @@ if (-not (Test-Path -LiteralPath $Local)) {
 if (-not (Test-Path -LiteralPath (Join-Path $Local $Marcador))) {
     Sair "Marcador $Local\$Marcador ausente. Se o disco esta montado e e a primeira vez, crie-o (veja README.md)."
 }
+
+# O git (Windows) marca como somente leitura arquivos de .git (commit-graph, packs). O rclone não
+# consegue sobrescrever nem apagar arquivo somente leitura ("Acesso negado"). Tirar o atributo não
+# afeta o git. Os projetos ficam a no máximo 4 níveis de E:\Projetos.
+Get-ChildItem -LiteralPath $Local -Directory -Force -Recurse -Depth 4 -Filter '.git' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\(\.venv|venv|node_modules|\.next)\\' } |
+    ForEach-Object { & attrib.exe -R "$($_.FullName)\*" /S /D 2>$null | Out-Null }
 
 New-Item -ItemType Directory -Force -Path $PastaLogs | Out-Null
 $Agora = Get-Date -Format 'yyyy-MM-dd_HHmmss'

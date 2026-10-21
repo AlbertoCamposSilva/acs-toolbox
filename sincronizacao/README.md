@@ -50,7 +50,9 @@ Fora desta pasta, em cada PC (nunca sincronizados):
 
 ## O que é e o que não é sincronizado
 - **Sincroniza:** todo o resto, inclusive `.git`, `.env`, `dist`, `.vscode` e os dados (PDF, CSV, JSONL...).
-- **Não sincroniza:** veja `filtros.txt`. Os ambientes virtuais são recriados em cada PC com
+- **Não sincroniza:** veja `filtros.txt`. Inclui `Pessoais/Tarefas Diárias/mesa/dados/`, os dados vivos
+  do `mesa` (WhatsApp, servidor, MCP), que **roda só no notebook de casa**. Não inicie o `mesa` no PC
+  do CNPq com a mesma sessão do WhatsApp. Os ambientes virtuais são recriados em cada PC com
   `uv sync --directory "<projeto>"`, e o `node_modules` com `npm install`.
 - Em 2026-10-20: cerca de 161 mil arquivos e 46 GB depois dos filtros.
 
