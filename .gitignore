@@ -15,7 +15,6 @@ build/
 
 # Notas locais (não publicar)
 NOTAS_LOCAIS_*.md
-sincronizacao/
 
 # Logs gerados ao executar código localmente
 *.log
