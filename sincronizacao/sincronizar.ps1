@@ -79,6 +79,9 @@ $Argumentos = @(
     '--create-empty-src-dirs',
     '--resilient', '--recover', '--max-lock', '2h',
     '--drive-skip-gdocs',
+    # O Google às vezes marca arquivo próprio como "malware ou spam" (ex.: teste com URLs suspeitas)
+    # e recusa o download sem esta confirmação.
+    '--drive-acknowledge-abuse',
     '--fast-list',
     '--transfers', '8', '--checkers', '16',
     '--stats', '1m', '--stats-one-line',

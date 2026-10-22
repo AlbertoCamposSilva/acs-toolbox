@@ -89,7 +89,16 @@ if (-not (Test-Path -LiteralPath $Marcador)) {
 } else { Write-Host 'Ja existe.' }
 
 Etapa '5/7 Git: commit + pull + push de cada repositorio'
-$codigo = Rodar 'preparar_git.ps1'
+# Só antes da PRIMEIRA tentativa de sincronizar. Depois de um -Resync interrompido, E:\Projetos fica
+# com uma mistura de versões (e arquivos ainda não baixados): um commit automático ali registraria
+# versões intermediárias e apagaria arquivos.
+$jaTentou = @(Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'rclone\logs') -Filter 'sincronizar_*.log' -ErrorAction SilentlyContinue).Count -gt 0
+if ($jaTentou) {
+    Write-Host 'Pulada: ja houve uma tentativa de sincronizacao neste PC (o git ficou para antes da primeira).' -ForegroundColor Yellow
+    $codigo = 0
+} else {
+    $codigo = Rodar 'preparar_git.ps1'
+}
 if ($codigo -ne 0) {
     Write-Host 'Ha repositorios marcados REVISAR/ERRO (veja a tabela acima).' -ForegroundColor Yellow
     Write-Host 'Voce pode resolver agora e rodar este script de novo, ou continuar: nesses repositorios'

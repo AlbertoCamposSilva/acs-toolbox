@@ -99,8 +99,13 @@ $resultado = foreach ($repo in $repos) {
             $r = G $repo add -A
             if ($r.Codigo -ne 0) { [pscustomobject]@{ Repositorio = $nome; Situacao = 'ERRO'; Detalhe = "git add: $($r.Saida)" }; continue }
             $r = G $repo commit '-m' $Mensagem
-            if ($r.Codigo -ne 0) { [pscustomobject]@{ Repositorio = $nome; Situacao = 'ERRO'; Detalhe = "git commit: $($r.Saida)" }; continue }
-            $acoes.Add("commit de $n arquivo(s)")
+            if ($r.Codigo -ne 0 -and $r.Saida -match 'nothing to commit|nada a submeter') {
+                # Só diferença de data/fim de linha: o "git add" normalizou e não sobrou nada.
+            } elseif ($r.Codigo -ne 0) {
+                [pscustomobject]@{ Repositorio = $nome; Situacao = 'ERRO'; Detalhe = "git commit: $($r.Saida)" }; continue
+            } else {
+                $acoes.Add("commit de $n arquivo(s)")
+            }
         }
     }
 

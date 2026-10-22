@@ -21,6 +21,11 @@
 - .ipynb_checkpoints/**
 - .uv-cache/**
 
+# Worktrees de sessões do Claude Code: cópias inteiras do projeto, registradas no git com caminho
+# absoluto do PC onde foram criadas (não funcionam no outro PC).
+- .claude/worktrees/**
+- .git/worktrees/**
+
 # Build do Next.js (regenerado por "npm run build"/"next dev")
 - .next/**
 
